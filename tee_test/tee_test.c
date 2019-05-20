@@ -22,8 +22,6 @@
 #include <regex.h>
 #include <errno.h>
 
-#define MAX_CHAR 1024
-
 struct option opts[] = {
 	{ "append", 0, NULL, 'a' },
 	{ "--ignore-interrupts", 0, NULL, 'i' },
@@ -48,33 +46,47 @@ static void usage(void)
  *	file:the file name,include path*
  *
  */
-static int handle_file(char *file)
+static int handle_file(int argc, char *file)
 {
 	int err = 0;
 	int fd = 0;
-	char buffer[MAX_CHAR];
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
 
-	memset(buffer, 0, sizeof(buffer)/sizeof(buffer[0]));
 	if(file == NULL) {
 		err = -1;
 		printf("use -a|--append must give a file!\n");
 		return err;
 	}
-	//1.判断文件是否存在，不存在则新建且打开，存在，则打开
-	fd = open(file, O_RDWR|O_APPEND);
 
-	if(fd < 0) {
-		fd = open(file, O_RDWR | O_CREAT | O_APPEND);
+	if (argc < 3) {
+		fd = open(file, O_RDWR, 0666);
 		if(fd < 0) {
-			err = -1;
-			printf("creat file %s failed!\n",file);
-			return err;
+			fd = open(file, O_RDWR | O_CREAT, 0666);
+			if(fd < 0) {
+				err = -1;
+				printf("creat file %s failed!\n",file);
+				return err;
+			}
+		}
+	}
+	else {
+		//1.判断文件是否存在，不存在则新建且打开，存在，则打开
+		fd = open(file, O_RDWR|O_APPEND, 0666);
+
+		if(fd < 0) {
+			fd = open(file, O_RDWR | O_CREAT | O_APPEND, 0666);
+			if(fd < 0) {
+				err = -1;
+				printf("creat file %s failed!\n",file);
+				return err;
+			}
 		}
 	}
 	//2.对打开的文件，在文件最后面追加内容
-	while(fgets(buffer, MAX_CHAR, stdin) != NULL) {
-		printf("%s",buffer);
-		err = write(fd, buffer, MAX_CHAR);
+	while((read = getline(&line, &len, stdin)) != -1) {
+		err = write(fd, line, read);
 		if(err<0) {
 			close(fd);
 			return err;
@@ -88,8 +100,12 @@ int main(int argc, char *argv[])
 	int c;
 	int err = 0;
 
-	if (argc < 2) {
-		usage();
+	if (argc < 3) {
+		err = handle_file(argc, argv[1]);
+		if(err < 0) {
+			printf("write char to %s error!\n",argv[1]);
+			return err;
+		}
 		return 0;
 	}
 	while((c = getopt_long(argc, argv, "aih", opts, NULL)) != -1)
@@ -100,7 +116,7 @@ int main(int argc, char *argv[])
 					err = -1;
 					return err;
 				}
-				err = handle_file(argv[2]);
+				err = handle_file(argc, argv[2]);
 				if(err < 0) {
 					printf("append to %s error!\n",argv[2]);
 					return err;
