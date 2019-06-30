@@ -1,6 +1,6 @@
 /*
  * atomic_append:an exercise of the linux programming interface
- * 
+ *
  * test open file with O_APPEND to keep open file atomic.
  *
  * author:huafenghuang
@@ -9,6 +9,17 @@
  *
  *	gcc -o atomic_append atomic_append.c
  *
+ *	./atomic_append test 1000000 & ./atomic_append test 1000000
+ *	    CPU0                                    CPU1
+ *	atomic_append1				atomic_append2
+ *		|					|
+ *		|					|
+ *	lseek(fd, 0, SEEK_END);			lseek(fd, 0, SEEK_END);
+ *		|				write(fd, buf, strlen(buf));
+ *		|
+ *	write(fd, buf, strlen(buf));
+ *
+ *	in this case ,it cause data overwrite.
  */
 #include <stdio.h>
 #include <stdlib.h>
