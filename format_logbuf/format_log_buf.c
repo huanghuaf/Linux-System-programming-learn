@@ -30,11 +30,10 @@ enum log_flags {
 	LOG_CONT	= 8,	/* text is a fragment of a continuation line */
 };
 
-//argv[1] should be file's name, eg. log_buf.log
 int main(int argc, char *argv[])
 {
 	int ret, count=0;
-	int dev;
+	int fd;
 	int noprefix_nr = 1;
 	int find_flag = 0;
 	__off_t start_offset, cur_offset, end_offset;
@@ -53,13 +52,13 @@ int main(int argc, char *argv[])
 	}
 
 	if (argv[1] != NULL) {
-		dev =open(argv[1], O_RDONLY);
+		fd =open(argv[1], O_RDONLY);
 	} else {
 		printf("file name error\n");
 		exit(-1);
 	}
 
-	if (dev < 0) {
+	if (fd < 0) {
 		printf("cannot open input file:%s\n", argv[1]);
 		exit(-2);
 	}
@@ -68,7 +67,7 @@ int main(int argc, char *argv[])
 
 	while (1) {
 read_head:
-		ret = read(dev, head_buf, HEAD_SIZE);
+		ret = read(fd, head_buf, HEAD_SIZE);
 		if(ret < 0)
 		{
 			printf("err to read head\n");
@@ -77,7 +76,7 @@ read_head:
 		else if ((ret != HEAD_SIZE) && (ret >= 0))
 		{
 			printf("<-----------------------Copyright (C) 2015~2016  Superm Wu-------------------------->\n");
-			close(dev);
+			close(fd);
 			return 0;
 		}
 
@@ -87,39 +86,33 @@ read_head:
 		memcpy((void *)&dict_size, (void *)(&head_buf[DICT_OFFSET]), 2);
 		print_prefix = head_buf[HEAD_SIZE-1];
 		text_size_roundup = ROUNDUP((text_size + dict_size), 4);
-		//printf("text_size:0x%x, text_size_roundup:0x%x, record_size:0x%x\n", text_size, text_size_roundup, record_size);
 
 		if ((record_size != (text_size_roundup + HEAD_SIZE)) || (text_size_roundup > BUF_SIZE )) {
 			if (find_flag == 0) {
-				start_offset = lseek(dev, -0x10, SEEK_CUR);
+				start_offset = lseek(fd, -0x10, SEEK_CUR);
 				find_flag = 1;
 				if (noprefix_nr == 1) {
 					printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^end^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
 					printf("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvstartvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\n");
 				}
 			}
-			//printf("head[0]:0x%x\n", head_buf[0]);
-			//if (((noprefix_nr == 1) || ((noprefix_nr != 1) && (head_buf[0] != 0x0a)) || (text_size_roundup > BUF_SIZE ))) {
-				lseek(dev, (-HEAD_SIZE+1), SEEK_CUR);
-				goto read_head;
-			//}
+			lseek(fd, (-HEAD_SIZE+1), SEEK_CUR);
+			goto read_head;
 		}
 
 		if (find_flag == 1) {
-			cur_offset = lseek(dev, 0, SEEK_CUR);
+			cur_offset = lseek(fd, 0, SEEK_CUR);
 			end_offset = cur_offset - 0x10;
-			lseek(dev, start_offset, SEEK_SET);
-			read(dev, text_buf, end_offset - start_offset);
+			lseek(fd, start_offset, SEEK_SET);
+			read(fd, text_buf, end_offset - start_offset);
 			text_buf[end_offset - start_offset] = '\0';
-			//printf("0x%x, 0x%x~0x%x\n", (unsigned int)cur_offset, (unsigned int)start_offset, (unsigned int)end_offset);
 			printf("%s\n", text_buf);
-			lseek(dev, cur_offset, SEEK_SET);
+			lseek(fd, cur_offset, SEEK_SET);
 			find_flag = 0;
 			noprefix_nr++;
-			//goto read_head;
 		}
 
-		if(read(dev, text_buf, text_size_roundup) < 0)
+		if(read(fd, text_buf, text_size_roundup) < 0)
 		{
 			printf("err to read text\n");
 			exit(-3);
@@ -133,12 +126,10 @@ read_head:
 				}
 				if (dict_size) {
 					for (count = 0; count <= dict_size;) {
-						//memcpy(temp_buf+text_size+1, text_buf+text_size, dict_size);
 						count += sprintf(temp_buf+text_size+count+1, "%s", text_buf+text_size+count);
 						count++;
 						temp_buf[text_size+count] = '\n';
 					}
-					//temp_buf[text_size+count-1] = '\n';
 					temp_buf[text_size+count] = '\n';
 					temp_buf[text_size+count+1] = '\0';
 				} else {
